@@ -1,0 +1,364 @@
+---
+title: "Des arbres et des forêts"
+author: "CB"
+date: "23 février 2020"
+output: html_document
+bibliography: bibtree.bib
+---
+
+<style type="text/css">
+body, td {
+   font-size: 12px;
+}
+code.r{
+  font-size: 10px;
+}
+h1{
+  font-size: 24px;
+}
+h2{
+  font-size: 18px;
+}
+h3{
+  font-size: 14px;
+}
+pre {
+  font-size: 11px
+}
+</style>
+
+![https://www.flickr.com/photos/zapirain/](foret-basque-oskar-zapirain-photo-7.jpg)
+
+L'objectif de cette note est double. Le premier est une introduction aux méthodes d'arbres de décision et leur généralisation récente par les random forests. Le second est d'introduire à l'approche d'apprentissage et de test, autrement aux méthodes de machine learning (avec le package caret) qui encourage aux critères de prédiction plutôt qu'à ceux d'ajustement. 
+
+On commencera avec l'idée d'arbres de décisions, avec un algo qui va audelà des aids et des chairds, formes canoniques des arbres de décision, pour introduire les desormais célèbres forêts alétoires,  et un traitement des données original par ses critères et sa méthode : séparer l'estimation d'un modèle de son évalutation en splittant le set de données.
+
+
+# 1-Préparation des données
+
+Les données sont extraites de l'ESS, une sélection est disponible.  Elles couvrent les 9 vagues et concernent la France et L'allemagne. Les variables dépendantes (celles que l'on veut étudier et expliquer) sont les 9 items de la confiance, les variable considérées comme indépendantes (ou explicatives) sont une séléction de variables socio-démographiques : age, genre, perception du pouvoir d'achat, orientation politique, type d'habitat. 
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, include=TRUE, cache=TRUE, message=FALSE, warning=FALSE, cache=TRUE)
+library(tidyverse)
+library(gridExtra)
+library(caret)
+library(randomForest)
+library(partykit)
+library(knitr)
+library(kableExtra)
+df<-readRDS("mastermoi.rds")
+#quelques recodages
+#on renomme pour plus de clarte
+names(df)[names(df)=="trstun"] <- "NationsUnies" 
+names(df)[names(df)=="trstep"] <- "ParlementEurop" 
+names(df)[names(df)=="trstlgl"] <- "Justice" 
+names(df)[names(df)=="trstplc"] <- "Police" 
+names(df)[names(df)=="trstplt"] <- "Politiques" 
+names(df)[names(df)=="trstprl"] <-"Parlement" 
+names(df)[names(df)=="trstprt"] <- "Partis"
+names(df)[names(df)=="pplhlp"] <- "help"
+names(df)[names(df)=="pplfair"] <- "fair"
+names(df)[names(df)=="ppltrst"] <- "trust"
+
+#on construit les scores de confiance 
+df<-df %>% mutate(trust_institut=(Partis+Parlement+Politiques+Police+Justice+NationsUnies+ParlementEurop)*10/7)
+df<-df %>% mutate(trust_interpersonnel=(help+fair+trust)*10/3)
+
+#recodage des variables indépendantes
+df$Year[df$essround==1]<-2002 
+df$Year[df$essround==2]<-2004 
+df$Year[df$essround==3]<-2006 
+df$Year[df$essround==4]<-2008 
+df$Year[df$essround==5]<-2010 
+df$Year[df$essround==6]<-2012 
+df$Year[df$essround==7]<-2014 
+df$Year[df$essround==8]<-2016 
+df$Year[df$essround==9]<-2018 
+
+df$Year<-as.factor(df$Year) 
+
+df$foyer[df$hhmmb==1]<-"Une personne"
+df$foyer[df$hhmmb==2]<-"Deux personnes"
+df$foyer[df$hhmmb==3]<-"Trois personnes"
+df$foyer[df$hhmmb==4]<-"Quatre personnes"
+df$foyer[df$hhmmb==5]<-"Cinq personne et plus"
+df$foyer<-factor(df$foyer, levels=c("Une personne","Deux personnes","Trois personnes","Quatre personnes","Cinq personne et plus"))
+#ggplot(df,aes(x=lrscale))+geom_histogram()
+df$OP[df$lrscale==0] <- "Extrême gauche" 
+df$OP[df$lrscale==1] <- "Gauche" 
+df$OP[df$lrscale==2] <- "Gauche" 
+df$OP[df$lrscale==3] <- "Centre Gauche" 
+df$OP[df$lrscale==4] <- "Centre Gauche" 
+df$OP[df$lrscale==5] <- "Ni G ni D" 
+df$OP[df$lrscale==6] <- "Centre Droit" 
+df$OP[df$lrscale==7] <- "Centre Droit" 
+df$OP[df$lrscale==8] <- "Droite" 
+df$OP[df$lrscale==9] <- "Droite" 
+df$OP[df$lrscale==10] <- "Extrême droite" 
+#la ligne suivante est pour ordonner les modalités de la variables
+df$OP<-factor(df$OP,levels=c("Extrême droite","Droite","Centre Droit","Ni G ni D","Centre Gauche","Gauche","Extrême gauche"))
+
+
+df$rev<-df$hincfel
+df$revenu[df$hincfel>4] <- NA
+df$revenu[df$hincfel==1] <- "Confortable" 
+df$revenu[df$hincfel==2] <- "Se débrouille" 
+df$revenu[df$hincfel==3] <- "Insuffisant" 
+df$revenu[df$hincfel==4] <- "Très insuffisant" 
+df$revenu<-factor(df$revenu,levels=c("Confortable","Se débrouille","Insuffisant","Très insuffisant"))
+
+df$habitat[df$domicil==1]<- "Big city"
+df$habitat[df$domicil==2]<-"Suburbs"
+df$habitat[df$domicil==3]<-"Town"
+df$habitat[df$domicil==4]<-"Village"
+df$habitat[df$domicil==5]<-"Countryside"
+df$habitat<-factor(df$habitat,levels=c("Big city","Suburbs","Town","Village","Countryside"))
+
+df$genre[df$gndr==1]<-"H"
+df$genre[df$gndr==2]<-"F"
+df$genre<-as.factor(df$genre)
+
+
+df$age[df$agea<26]<-"25<"
+df$age[df$agea>25 & df$agea<36]<-"26-35"
+df$age[df$agea>35 & df$agea<46]<-"36-45"
+df$age[df$agea>45 & df$agea<66]<-"46-65"
+df$age[df$agea>65 & df$agea<76]<-"66-75"
+df$age[df$agea>75]<-"75>"
+df$age<-factor(df$age,levels=c("25<","26-35","36-45","46-65","66-75", "75>"))
+
+df$cntry<-as.factor(df$cntry)
+
+
+
+dfw<-df %>% select(Year,cntry, age, habitat, revenu, genre,foyer, OP,trust_interpersonnel ) %>% filter(Year==2018) %>%drop_na()
+
+dfw<-dfw%>% mutate (conf=ifelse(trust_interpersonnel<55,"low","high"))
+dfw$conf<-factor(dfw$conf, levels=c("low","high"))
+dfw <-dfw %>% select(-trust_interpersonnel)
+ggplot(dfw, aes(x=conf))+geom_bar()+ theme_minimal()                        
+
+```
+
+# 2-Construire un arbre de décision
+
+## 2.1 Les origines et le principe
+
+C'est une approche qui remonte à @morgan_problems_1963  
+
+généralisés aux variables qualitatives avec Chaid (@kass_exploratory_1980) : 
+
+
+Le principe général suis le pseudo algorithme suivant :
+
+1) pour chaque variable potentiellement explicative, trouver le meilleur découpage (dichotomique), c'est à dire celui qui va différencier au mieux la variable de réponse.
+2) Choisir parmi les variables et leur dichotomitsation celle qui répond au même critère que précedemment
+3) recommencer l'opération à 1
+
+Il peut s'appliquer à une variable quantitative ( regression) ou qualitative ( chaid)
+
+puis Cart avec breiman. @breiman_classification_1998
+
+
+## 2.2-Mise en oeuvre avec Partykit
+
+Le package partykit a pour objectif de représenter les arbres de décisions. Il inclue cependant plusieurs méthodes d'arbres de decisions, en en particulier une approche ctree @hothorn_lego_2006 dont le principe est. La méthode est incluse dans partykit @hothorn_partykit_2015
+
+
+avec partykit on contrôle la construction de l'arcre sur différents critères, par exemple :
+ * le type de test employé pour prendre la décision 
+ * le nombre minimum d'individus dans une feuille terminale
+
+
+```{r rf01b, fig.width=18, fig.height=12}
+#library(partykit)
+
+tree <-ctree(conf ~ cntry+habitat + revenu +age+genre+OP+foyer, data=dfw,control = partykit::ctree_control(maxsurrogate = 5, alpha = 0.05,minsplit = 100, numsurrogate = TRUE))
+plot(tree, tp_args = list(text = TRUE))
+
+#en plus beau on spécifie plus précisément les éléments de l'arbre
+columncol<-hcl(c(270, 260, 250), 200, 30, 0.6)
+labelcol<-hcl(200, 200, 50, 0.2)
+indexcol<-hcl(150, 200, 50, 0.4)
+jpeg("Tree.jpg", width=2000, height=750)
+plot.new()
+plot(tree, type = c("simple"), gp = gpar(fontsize = 15),
+     drop_terminal = TRUE, tnex=1, 
+     inner_panel = node_inner(tree, abbreviate = TRUE,fill = c(labelcol, indexcol), pval = TRUE, id = TRUE), terminal_panel=node_barplot(tree, col = "black", fill = columncol[c(1,2,4)], beside = FALSE,ymax = 1, ylines = TRUE, widths = 1, gap = 0.1,reverse = FALSE, id = TRUE))
+```
+
+Pour  évaluer la qualité du modèle, on utilise la fonction `predict` et on croise le résultat avec les observations. On utilise la fonction `confusionMatrix` pour calculer les différents indices de qualité dans l'esprit machine learning. Autrement la précision et le recall.
+
+L'accuracy est de 60.1%, significative mais peu élevée. Elle représente le % da proportion de vrais positifs et de vrais négatifs. Au meilleurs des hasards on en reclasserait 51,14%. On améliore donc la prévision de (0.601-0.5114)/(1-0.5114) =18.3% d'amélioration. Le kappa indique la corrélation prédiction/ observation.
+
+
+La précision est de 56%, elle indique le % de vrai-positifs détectés parmis tous les positifs détectés - inversement 44% des cléssés positifs sont des faux, on est pas très précis. Le rappel mesure lui le % de vrais positifs  retrouvés parmis les positifs detectés. Avec 74% la performance n'est pas mauvaise, on retrouve plutôt bien ses petits.
+
+```{r rf02d, fig.width=12}
+table(predict(tree), dfw$conf)
+pred<-as.data.frame(predict(tree))
+mat <- confusionMatrix(data=pred$pred,reference=dfw$conf, positive="high")
+print(mat)
+#accès aux indicateurs globaux 
+#print(mat$overall)
+#print(mat$overall["Accuracy"])
+print(mat$byClass)
+```
+
+Dans un souci d'opérationnalisation, on peut souhaiter récupérer les règles pour reclasser d'autres observations. Le package `irks` peut s'en occuper.
+
+```{r rf02b, fig.width=12}
+#creation des règles
+
+library(irks)
+rules<-ct_rules(tree)
+
+rules %>% 
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", font_size = 10)
+```
+
+
+
+
+# 3-Plus qu'un arbre, une forêt
+
+Ces derniers années les arbres de décisions se sont enrichies par une approche ensembliste et une stratégie particulière. Plutôt que de construire un seul arbre, l'idée est d'en construire une forêt en perturbant les données : ne présenter qu'un sous échantillon des variables ou des observations. Une fois ces centaines ou milliers d'arbres construits, on les fait voter, à chaque niveau de découpage on reparge à travers les arbres celui qui a le meilleurs résultats, l'arbre final est donc une construction electorale!
+https://cran.r-project.org/web/packages/caret/vignettes/caret.html
+
+https://topepo.github.io/caret/
+
+On va de plus adopter une apprche machine learning, atutrement une approche de la performance predictive du modèle qui s'appuit sur l'idée de réplication. Fondamentalement on coupe donc l'échantillon en au moins deux parties ( ici ce sera moitié moitié, mais on peut tester d'autres stratégies), l'une servant à construire le modèle, l'autre à le tester, de manière indépendante.
+L'esprit de la méthode est clair : le performance prédictive se teste sur un échantillon indépendant de celui qui a permis d'estimer les paramètres. Nous avions l'ahabitude tester l'ajustement du modèle aux données, désormais il va falloir apprendre à tester le modèles sur un échantillon apparié. L'ajustement n'est pas le critère principal, le critère principal est la capacité de bien prédire pour de nouveaux jeux de données. C'est la garantie d'un modèle robuste.
+
+Le taux d'erreurs est calculé en prédisant sur l'ensemble de l'échantillon les classes calculés sur une seule fraction (chaque arbres ne prend en compte qu'une fractions de la population et une fraction des variables). Elle est de 41.41%, est forte mais meilleure pour les positifs (high), on les detecte à 76%.
+
+
+```{r rf00}
+
+set.seed(3456)
+trainIndex <- createDataPartition(dfw$conf, p = .3, 
+                                  list = FALSE, 
+                                  times = 1)
+head(trainIndex)
+
+dfTrain <- dfw[ trainIndex,]
+dfTest  <- dfw[-trainIndex,]
+
+fitControl <- trainControl()
+
+m_rf <- train(conf ~ ., data = dfTrain, method="rf",trControl=fitControl)
+print(m_rf)
+
+print(m_rf$finalModel)
+```
+# 5.0 Validation
+on predit maintenant sur l'échantillon test en réutilisant la fonction confusionMatrix.
+
+```{r rf01a}
+pred <- predict(m_rf,newdata=dfTest,na.action = na.pass)
+pred<-as.data.frame(pred)
+mat <- confusionMatrix(data=pred$pred,reference=dfTest$conf, positive="high")
+print(mat)
+#accès aux indicateurs globaux 
+#print(mat$overall)
+#print(mat$overall["Accuracy"])
+print(mat$byClass)
+
+library(pROC)
+
+```
+
+# Mesurer l'importance des variables
+
+le problème de ce tyoe d'analyse est que l'on perd d'appréciation du rôle des variables sur l'evaluation finale. On perd la linéraité qui permet de ramener à une même échelles l'ensembles des impacts.
+
+Une idées= d'est imposée : mesurer la contribution d'une variable explicative en mesurant quelle proportion d'ajustement est perdue quand on ne prend pas en compte cette variable.
+
+
+```{r rf02c}
+
+imp<-varImp(m_rf)
+imp<-imp[[1]]
+ggplot(imp, aes(x=reorder(rownames(imp),Overall), y=Overall))+geom_bar(stat="identity")+coord_flip()
+       
+plot(m_rf, main = "Learning curve of the forest")
+
+
+```
+
+# Expliquer les predictions
+
+On utilise le package [`randomForestExplainer`](https://cran.rstudio.com/web/packages/randomForestExplainer/vignettes/randomForestExplainer.html) à cette fin
+
+Une première méthode consiste à examiner la distribution de la profondeur minimal. Celle-ci indique à quel niveau minimal ( donc le plus proche de la racine) une variable est utilisée pour découper la population. 
+
+On extrait d'abord ces valeurs (pour chacun des arbres construits par le rf). comme le calcul est long on en sauve le résultat dans un fichier qu'on va exploiter ensuite
+
+```{r rf03}
+library(randomForestExplainer)
+
+forest <- randomForest(conf ~ ., data = dfw, localImp = TRUE)
+min_depth_frame <- min_depth_distribution(forest)
+save(min_depth_frame, file = "min_depth_frame.rda")
+```
+
+On trace le diagramme
+
+Ensuite, nous le passons à la fonction plot_min_depth_distribution et, sous les paramètres par défaut, nous obtenons un tracé de la distribution de la profondeur minimale pour les variables les plus importantes en fonction de la profondeur minimale moyenne calculée à l'aide des arbres supérieurs (mean_sample = "top_trees"). Nous pourrions également passer notre forêt directement à la fonction de traçage, mais si nous voulons faire plusieurs tracés de la distribution de la profondeur minimale, il est plus efficace de passer le cadre min_depth_frame à la fonction de traçage afin qu'il ne soit pas calculé à nouveau pour chaque tracé (cela fonctionne de la même manière pour les autres fonctions de traçage de randomForestExplainer).
+
+```{r rf04}
+
+load("min_depth_frame.rda")
+head(min_depth_frame, n = 10)
+plot_min_depth_distribution(min_depth_frame, mean_sample = "relevant_trees", k = 15)
+```
+d'autres mesures sont disponibles avec measure_importance, et on agit de la même manière.
+
+
+ * accuracy_decrease (classification) – mean decrease of prediction accuracy after Xj is permuted,
+
+ * gini_decrease (classification) – mean decrease in the Gini index of node impurity (i.e. increase of node purity) by splits on Xj,
+ * mse_increase (regression) – mean increase of mean squared error after Xjis permuted,
+
+ * node_purity_increase (regression) – mean node purity increase by splits on Xj, as measured by the decrease in sum of squares,
+
+ * mean_minimal_depth – mean minimal depth calculated in one of three ways specified by the parameter mean_sample,
+
+ * no_of_trees – total number of trees in which a split on Xj occurs,
+
+ * no_of_nodes – total number of nodes that use Xj for splitting (it is usually equal to no_of_trees if trees are shallow),
+
+ * times_a_root – total number of trees in which Xjis used for splitting the root node (i.e., the whole sample is divided into two based on the value of Xj),
+
+* p_value –This test tells us whether the observed number of successes (number of nodes in which Xj was used for splitting) exceeds the theoretical number of successes if they were random (i.e. following the binomial distribution given above).
+
+
+```{r rf05}
+
+importance_frame <- measure_importance(forest)
+save(importance_frame, file = "importance_frame.rda")
+load("importance_frame.rda")
+importance_frame 
+plot_multi_way_importance(importance_frame, size_measure = "no_of_nodes")
+plot_multi_way_importance(importance_frame, x_measure = "mean_min_depth", y_measure = "accuracy_decrease", size_measure = "no_of_trees", no_of_labels = 3)
+#plot_importance_rankings(importance_frame)
+```
+
+[voir aussi](
+https://cdn.staticaly.com/gh/geneticsMiNIng/BlackBoxOpener/master/randomForestExplainer/inst/doc/randomForestExplainer.html)
+
+# En conclusion
+
+Il y a d'autres solutions dans r pour les random forest. par exemple :
+ * rpart 
+ * 
+ 
+ Des tutoriels : On s'est inspiré de  
+ http://mehdikhaneboubi.free.fr/random_forest_r.html
+ 
+# Références
+ 

@@ -1,0 +1,44 @@
+---
+title: "Cours data Science"
+author: "Christophe Benavent"
+date: "11 mars 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+C'est un cours exigeant pour les étudiants qui demande beaucoups de travail personnel et un effort redoublé quand on a ni connaissance du code, ni base statistique solide. Il sera demandé autant de curiosité que d'effort et beaucoups d'engagement. On encourage à suivre les liens, à regarder d'autres sources. Ceux qui aiment le sudoku trouveront un réel plaisir à dominer le langage, les autres seront un peu désorientés mais se fairont vite une bonne idée de ce type d'outil.
+
+Nous focalisons sur r, Python peut faire la même chose.Et c'est  dans ces deux langages que s'expriment désormais tous les talents de la sciences des données qui va de leur captation à leur propagation, en passant par les phases de modélisation. 
+
+Dans leur usage ont distinguera trois problèmes :
+ * l'étude et la compréhension de ce qui produits un phénomène (analyser les cause d'une évolution des ventes)
+ * l'opérationnalisation à grande échelles de décisions indivuduelles ( établir un credit scoring pour décider si on prête ou pas)
+ * la génération de document : un air de musique, un compte-rendu sportifs, des recommandations
+ 
+ On se concentrera dans ce cours moins sur les résultats que sur les moyens. On privilégiera une connaissance de garage qui demande à mettre les mains dans la graisse, et à ouvrir le moteur. 
+
+
+## Syllabus
+
+* 1 -[L'environnement r](https://docs.google.com/presentation/d/1FdAIW83N8EAWHCn66PfnphdGyNr-wyS6dUPOlUTY0Hg/edit?usp=sharing)
+* 2 -Prise en Main de r : voir [Ressources pour r](http://r.benavent.fr/Ressources.html), pour rstudio , on lira aussi bookdown
+* 3 - [Dataviz avec ggplot](http://r.benavent.fr/graphMaj.html) : On apprend à y manipuler tidyverse et ggplot
+* 4 - [Corrélations et régressions](http://r.benavent.fr/regression.html) reprendre les bases dans l'esprit de r
+* 5 - [Analyse factorielle et clustering]() : pour revenir à la bonne éproque de l'analyse de données
+* 6 - des réseaux sociaux : on jouera avec twitter et l'idée de qui est proche de qui.
+* 7 - [Arbres de décisions et machine learning](http://r.benavent.fr/caret.html) on y verra comment une idée sexagénaire est devenue un modèle emblématique du machine learning. C'est plus que de la technique, mais de l'histoire des sciences
+* 8 - Un peu de NLP. On commencera par lire cette [synthèse] (https://www.researchgate.net/publication/337744581_NLP_text_mining_V40_-_une_introduction_-_cours_programme_doctoral) et on jettera un coup d'oeil au projet [Polynésie](https://github.com/BenaventC/polynesie) ou à celui [AirBnb](https://github.com/BenaventC/AirbnbStudies)
+
+## Data 
+
+* France allemagne (extrait de l'ESS)
+*
+
+
+## Book de référence
+
+* [Introduction à l’analyse d’enquêtes avec R et RStudio](https://larmarange.github.io/analyse-R/)
+* rubrique [#culturedata](https://management-datascience.org/category/actualites/culture-data/) de Management et Data Science

@@ -1,0 +1,262 @@
+---
+title: "Corrélation et Régressions"
+author: "CB"
+date: "20 février 2020"
+output: html_document
+---
+<style type="text/css">
+body, td {
+   font-size: 12px;
+}
+code.r{
+  font-size: 10px;
+}
+h1{
+  font-size: 24px;
+}
+h2{
+  font-size: 18px;
+}
+h3{
+  font-size: 14px;
+}
+pre {
+  font-size: 11px
+}
+</style>
+
+
+# Bibliothèques et données
+
+Les données sont un extrait de la base de l'ess. Elle rassemble les jugement de confiance à l'égards des institution et des personnes ( 10 items) en France et en allamenage, au cours de vagues d'enquêtes bi-annuelles de l'Européan Social Survey. On dispose donc de données de 20014 à 2018. S'joutent quelques variables socio-démo : le pouvoir d'achat percu, l'age, le genre, l'orientation politique, le type d'habitat. On cherchera à examiner l'impact des conditions de vie du la confiance. 
+
+```{r libraries, echo=TRUE, include=TRUE,, message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE, include=TRUE, cache=TRUE, message=FALSE, warning=FALSE)
+library(tidyverse)
+library(gridExtra)
+library(reshape2)
+library(ggridges)
+library(stargazer)
+library(jtools)
+
+#lecture du fichier
+df<-readRDS("mastermoi.rds")
+
+#quelques recodages
+
+#on renomme les items de confiance pour plus de clarte
+names(df)[names(df)=="trstun"] <- "NationsUnies" 
+names(df)[names(df)=="trstep"] <- "ParlementEurop" 
+names(df)[names(df)=="trstlgl"] <- "Justice" 
+names(df)[names(df)=="trstplc"] <- "Police" 
+names(df)[names(df)=="trstplt"] <- "Politiques" 
+names(df)[names(df)=="trstprl"] <-"Parlement" 
+names(df)[names(df)=="trstprt"] <- "Partis"
+names(df)[names(df)=="pplhlp"] <- "help"
+names(df)[names(df)=="pplfair"] <- "fair"
+names(df)[names(df)=="ppltrst"] <- "trust"
+
+#recodage des variables indépendantes
+df$Year[df$essround==1]<-2002 
+df$Year[df$essround==2]<-2004 
+df$Year[df$essround==3]<-2006 
+df$Year[df$essround==4]<-2008 
+df$Year[df$essround==5]<-2010 
+df$Year[df$essround==6]<-2012 
+df$Year[df$essround==7]<-2014 
+df$Year[df$essround==8]<-2016 
+df$Year[df$essround==9]<-2018
+df$Year<-as.factor(df$Year)
+
+df$cntry<-as.factor(df$cntry)
+
+#on construit les scores de confiance 
+df<-df %>% mutate(trust_institution=(Partis+Parlement+Politiques+Police+Justice+NationsUnies+ParlementEurop)*10/7)
+
+df<-df %>% mutate(trust_interpersonal=(help+fair+trust)*10/3)
+
+```
+
+# Un premier coup d'oeil sur les données 
+
+On doit examiner la distribution de Confiance institutionnelle et interpersonnelle, en France et en allemagne de 2004 à 2018. Mais ici on a des données de panels : un niveau pays et un niveau vague d'enquêtes, dont 14 enquêtes et quatorze distributions.
+
+Par exemple la distribution du score de confiance interpersonnelle en France et en 2018.
+
+
+```{r donnee}
+hist<-df %>% dplyr::select(Year,cntry, trust_institution) %>% melt(id=c("cntry", "Year")) %>%filter(Year!="2002")
+
+ggplot(df,aes(x=trust_institution))+geom_density(fill="lightblue")+
+  theme_minimal()+
+  labs(title = "Comparaison FR-ALL de l'évolution de la confiance institutionnelle",subtitle = "corrélation par vague" ,x = "Confiance", y="densité", caption="source : ESS 8 waves")
+
+```
+
+Généralisons aux deux variables et aux deux pays ainsi qu'aux 7 vagues d'enquetes. Une première méthode consiste à utiliser la fonction facet_grid de ggplot2.
+
+
+```{r donnee2}
+
+hist<-df %>% dplyr::select(Year,cntry, trust_institution) %>% 
+  melt(id=c("cntry", "Year")) %>%filter(Year!="2002")
+ggplot(hist,aes(x=value))+geom_density(fill="lightblue")+facet_grid(Year~cntry)+
+  theme_minimal()+
+  labs(title = "Comparaison FR-ALL de l'évolution de la confiance institutionnelle",subtitle = "corrélation par vague" ,x = "Confiance", y="densité", caption="source : ESS 8 waves")
+
+hist<-df %>% dplyr::select(Year,cntry, trust_interpersonal) %>% 
+  melt(id=c("cntry", "Year")) %>%filter(Year!="2002")
+ggplot(hist,aes(x=value))+geom_density(fill="lightblue")+facet_grid(Year~cntry)+
+  theme_minimal()+
+  labs(title = "Comparaison FR-ALL de l'évolution de la confiance interpersonnelle",subtitle = "corrélation par vague" ,x = "Confiance", y="densité", caption="source : ESS 8 waves")
+
+```
+
+On peut cependant faire beaucoup mieux avec `ggridges`, et encore plus simplement et de manières plus élégante. Un bel hommage à joy division] (). https://www.etsy.com/fr/listing/599973120/joy-division-unknown-pleasures-album-art
+
+
+```{r ridge}
+
+#library(ggridges)
+
+hist<-df %>% dplyr::select(Year,cntry, trust_institution, trust_interpersonal) %>% 
+  melt(id=c("cntry", "Year")) %>%filter(Year!="2002")
+hist
+ggplot(hist, aes(value, Year, group = Year, height = ..density..)) +
+  geom_density_ridges(stat = "density", trim = TRUE) + facet_grid((variable~cntry))+theme_minimal()
+
+```
+
+bien sur on veut mieux saisir les variations de la tendance centrale, pour les deux variable et les deux pays à travers les 7 vagues d'enquêtes.
+
+```{r ridge2, warning =TRUE}
+
+foo<-hist %>% filter(!is.na(value)) %>% group_by(cntry,variable,Year) %>% dplyr::summarise(Conf=mean(value, na.rm=FALSE))
+foo
+
+ggplot(foo, aes( x=Year, y=Conf, group = variable, group=cntry)) +geom_line(aes(color=variable), size=1.5) +theme_minimal()+ facet_grid(cntry~.)
+
+```
+
+# La corrélation entre les deux composantes de la confiance
+
+On va faire un une analyse classique de correlation mais répété à travers les pays et les vagues d'enquêtes. Manifestement les corrélations sont stables dans le temps et les pays à une constante d'échelle et de paramètre près.
+
+```{r pressure, echo=FALSE}
+ggplot(df,aes(x=trust_institution,y =trust_interpersonal, group=Year, color=Year))+
+  geom_point(size=0.1, position="jitter", color="grey")+ 
+  geom_smooth(method="lm")+
+  facet_grid(.~cntry)+ 
+  theme_minimal()+
+  labs(title = "Comparaison FR-ALL de la correlation des composantes de la confiance",subtitle = "corrélation par vague" ,x = "Institutionnelle", y="Interpersonnelle", caption="source : ESS 8 waves")+   scale_color_brewer(palette="Green")
+```
+
+
+Pour mieux saisir les variation de corrélations, on peut vérifier en calculant les corrélations par année et par pays, et en les représentant graphiquement.
+
+```{r correlation}
+library(corrplot)
+df_cor <-df %>% dplyr::select(cntry,Year,trust_institution, trust_interpersonal) %>%filter(!is.na(trust_interpersonal) & !is.na(trust_institution))
+library(plyr)
+cor <- ddply(df_cor, c("Year","cntry"), summarise, corr=cor(trust_institution, trust_interpersonal))
+cor
+ggplot(cor, aes(x=Year,y=corr,group=cntry))+geom_line(size=1.5,aes(color=cntry)) +
+  theme_minimal()+ylim(0.3,0.6)+
+  labs(title = "Evolution des corrélations entre éléments de la confiance",subtitle = "corrélations par vague et pays" ,x = "Vagues d'enquêtes", y="Correlation de pearson", caption="source : ESS 8 waves")
+
+```
+# corrélations multiples
+
+nous avons raisonner sur la base d'une relation,on pourrait vouloir observer toutes les corrélations entre k variables. Regardons ce qui en est si on reprends les, items qui ont servi à construire les scores de satisfaction. On notera que c'est le point de départ d'une analyse factorielles.
+
+On pourra chercher à représenter cette matrice pour les différents pays et vagues d'enquetes. Mais celà suffira.
+
+```{r corrmultiple}
+library(corrplot)
+M<-df %>% dplyr::select(help,fair,trust,NationsUnies,ParlementEurop,Justice, Police,Politiques,Parlement,Partis) %>% drop_na()
+M<-cor(M)
+corrplot(M, order = "hclust",addrect = 3)
+```
+
+# régression multiple
+
+on va maintenant cercher à expliquer les différences entre les niveaux de confiances en fonction de quelques variables socio demo. Autrement dit construire un modèle du type :
+
+y= a0+a1X1+a2X2+...+e
+
+On va avoir besoin de recodage des variables explicatives.
+
+```{r regress00}
+df$OP[df$lrscale==0] <- "Extrême gauche" 
+df$OP[df$lrscale==1] <- "Gauche" 
+df$OP[df$lrscale==2] <- "Gauche" 
+df$OP[df$lrscale==3] <- "Centre Gauche" 
+df$OP[df$lrscale==4] <- "Centre Gauche" 
+df$OP[df$lrscale==5] <- "Ni G ni D" 
+df$OP[df$lrscale==6] <- "Centre Droit" 
+df$OP[df$lrscale==7] <- "Centre Droit" 
+df$OP[df$lrscale==8] <- "Droite" 
+df$OP[df$lrscale==9] <- "Droite" 
+df$OP[df$lrscale==10] <- "Extrême droite" 
+#la ligne suivante est pour ordonner les modalités de la variables
+df$OP<-factor(df$OP,levels=c("Extrême droite","Droite","Centre Droit","Ni G ni D","Centre Gauche","Gauche","Extrême gauche"))
+
+
+df$revenu<-df$hincfel
+df$revenu[df$hincfel>4] <- NA
+df$revenu[df$hincfel==1] <- "Vie confortable" 
+df$revenu[df$hincfel==2] <- "Se débrouille avec son revenu" 
+df$revenu[df$hincfel==3] <- "Revenu insuffisant" 
+df$revenu[df$hincfel==4] <- "Revenu très insuffisant" 
+df$revenu<-factor(df$revenu,levels=c("Vie confortable","Se débrouille avec son revenu","Revenu insuffisant","Revenu très insuffisant"))
+
+df$habitat[df$domicil==1]<- "Big city"
+df$habitat[df$domicil==2]<-"Suburbs"
+df$habitat[df$domicil==3]<-"Town"
+df$habitat[df$domicil==4]<-"Village"
+df$habitat[df$domicil==5]<-"Countryside"
+df$habitat<-factor(df$habitat,levels=c("Big city","Suburbs","Town","Village","Countryside"))
+
+df$genre[df$gndr==1]<-"H"
+df$genre[df$gndr==2]<-"F"
+
+df$age[df$agea<26]<-"25<"
+df$age[df$agea>25 & df$agea<36]<-"26-35"
+df$age[df$agea>35 & df$agea<46]<-"36-45"
+df$age[df$agea>45 & df$agea<66]<-"46-65"
+df$age[df$agea>65 & df$agea<76]<-"66-75"
+df$age[df$agea>75]<-"75>"
+df$age<-factor(df$age,levels=c("25<","26-35","36-45","46-65","66-75", "75>"))
+```
+
+construisons un modèle de régression multiple par les MCO pour les deux variables. On présente les résultats en suivant le modèle de stargazer
+
+```{r regress01}
+df_DE<-df %>% filter(cntry=="DE")
+library(lme4)
+fit00<-lm(trust_institution~age+genre+habitat+revenu+OP+trust_interpersonal+Year, data=df_DE)
+summary(fit00)
+fit01<-lm(trust_interpersonal~age+genre+habitat+revenu+OP+trust_institution+ Year, data=df_DE)
+
+df_FR<-df %>% filter(cntry=="FR")
+fit02<-lm(trust_institution~age+genre+habitat+revenu+OP+trust_interpersonal+Year, data=df_FR)
+fit03<-lm(trust_interpersonal~age+genre+habitat+revenu+OP+trust_institution+ Year, data=df_FR)
+
+summary(fit03)
+```
+
+On peut faire plus plus joli avec summ en produisant un diagramme des effets, le premier est général le second particulier. On utilise pour celà des fonctions du package `jtools`. https://cran.r-project.org/web/packages/jtools/vignettes/summ.html
+
+ 
+```{r regress02}
+
+#library(jtools)
+export_summs(fit00,scale = TRUE)
+plot_summs(fit00,fit01,fit02,fit03, scale = FALSE ,model.names = c("Institutionnelle DE", "Interpersonnelle DE", "Institutionnelle FR", "Interpersonnelle FR"), legend.title="Confiance")
+
+effect_plot(fit00, pred = OP, interval = TRUE, plot.points = FALSE)
+effect_plot(fit02, pred = OP, interval = TRUE, plot.points = FALSE)
+effect_plot(fit00, pred = trust_interpersonal, interval = TRUE, plot.points = FALSE)
+
+```
+https://cran.r-project.org/web/packages/jtools/vignettes/summ.html

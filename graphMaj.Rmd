@@ -1,0 +1,655 @@
+---
+title: "Un petit cours sur les graphiques (avec ggplot)"
+author: "Christophe Benavent"
+date: "26 janvier 2020"
+output: 
+  html_document : 
+    toc: true
+    toc_float: true
+---
+![confiance](france-allemagne.JPG)
+
+
+<style type="text/css">
+body, td {
+   font-size: 12px;
+}
+code.r{
+  font-size: 10px;
+}
+h1{
+  font-size: 24px;
+}
+h2{
+  font-size: 18px;
+}
+h3{
+  font-size: 14px;
+}
+pre {
+  font-size: 11px
+}
+</style>
+
+# Préparation des données
+
+Les données sont extraites de l'ESS, une sélection est disponible [ici]().  Elle couvre les 9 vagues et concernent la France et L'allemagne. Les variables dépendantes (celles que l'on veut étudier et expliquer) sont les 9 items de la confiance, les variable considérées comme indépendantes (ou explicatives) sont une séléction de variables socio-démographiques : age, genre, perception du pouvoir d'achat, orientation politique, type d'habitat. 
+
+On fait quelques opérations de recodage et on renomme les variables avoir une lecture plus aisée des variables et de leurs catégories. On appele au début les bibliothèques. La principale est [tidyverse](https://www.tidyverse.org/) qui est un bouquet de packages comprenant ggplot - dont voici le [book de référence](https://ggplot2-book.org/), qui est au centre de ce cours, et [dplyr](http://larmarange.github.io/analyse-R/manipuler-les-donnees-avec-dplyr.html) qui va nous permettre de manipuler les données aisément.(On recommande de jeter un coup d'oeil appuyés sur ces deux liens qui peuvent servir de manuels techniques)
+
+
+```{r setup, include=TRUE}
+knitr::opts_chunk$set(echo = TRUE, include=TRUE, cache=TRUE, message=FALSE, warning=FALSE, cache=TRUE)
+library(tidyverse)
+library(gridExtra)
+df<-readRDS("mastermoi.rds")
+write.csv(df,"mastermoi", row.names = TRUE)
+
+#quelques recodages
+#on renomme pour plus de clarte
+names(df)[names(df)=="trstun"] <- "NationsUnies" 
+names(df)[names(df)=="trstep"] <- "ParlementEurop" 
+names(df)[names(df)=="trstlgl"] <- "Justice" 
+names(df)[names(df)=="trstplc"] <- "Police" 
+names(df)[names(df)=="trstplt"] <- "Politiques" 
+names(df)[names(df)=="trstprl"] <-"Parlement" 
+names(df)[names(df)=="trstprt"] <- "Partis"
+names(df)[names(df)=="pplhlp"] <- "help"
+names(df)[names(df)=="pplfair"] <- "fair"
+names(df)[names(df)=="ppltrst"] <- "trust"
+
+#on construit les scores de confiance 
+df<-df %>% mutate(trust_institut=(Partis+Parlement+Politiques+Police+Justice+NationsUnies+ParlementEurop)*10/7)
+
+df<-df %>% mutate(trust_interpersonnel=(help+fair+trust)*10/3)
+
+#recodage des variables indépendantes
+df$Year[df$essround==1]<-2002 
+df$Year[df$essround==2]<-2004 
+df$Year[df$essround==3]<-2006 
+df$Year[df$essround==4]<-2008 
+df$Year[df$essround==5]<-2010 
+df$Year[df$essround==6]<-2012 
+df$Year[df$essround==7]<-2014 
+df$Year[df$essround==8]<-2016 
+df$Year[df$essround==9]<-2018 
+
+df$Year<-as.factor(df$Year) 
+
+#ggplot(df,aes(x=lrscale))+geom_histogram()
+df$OP[df$lrscale==0] <- "Extrême gauche" 
+df$OP[df$lrscale==1] <- "Gauche" 
+df$OP[df$lrscale==2] <- "Gauche" 
+df$OP[df$lrscale==3] <- "Centre Gauche" 
+df$OP[df$lrscale==4] <- "Centre Gauche" 
+df$OP[df$lrscale==5] <- "Ni G ni D" 
+df$OP[df$lrscale==6] <- "Centre Droit" 
+df$OP[df$lrscale==7] <- "Centre Droit" 
+df$OP[df$lrscale==8] <- "Droite" 
+df$OP[df$lrscale==9] <- "Droite" 
+df$OP[df$lrscale==10] <- "Extrême droite" 
+#la ligne suivante est pour ordonner les modalités de la variables
+df$OP<-factor(df$OP,levels=c("Extrême droite","Droite","Centre Droit","Ni G ni D","Centre Gauche","Gauche","Extrême gauche"))
+
+
+df$rev<-df$hincfel
+df$revenu[df$hincfel>4] <- NA
+df$revenu[df$hincfel==1] <- "Vie confortable" 
+df$revenu[df$hincfel==2] <- "Se débrouille avec son revenu" 
+df$revenu[df$hincfel==3] <- "Revenu insuffisant" 
+df$revenu[df$hincfel==4] <- "Revenu très insuffisant" 
+df$revenu<-factor(df$revenu,levels=c("Vie confortable","Se débrouille avec son revenu","Revenu insuffisant","Revenu très insuffisant"))
+
+df$habitat[df$domicil==1]<- "Big city"
+df$habitat[df$domicil==2]<-"Suburbs"
+df$habitat[df$domicil==3]<-"Town"
+df$habitat[df$domicil==4]<-"Village"
+df$habitat[df$domicil==5]<-"Countryside"
+df$habitat<-factor(df$habitat,levels=c("Big city","Suburbs","Town","Village","Countryside"))
+
+df$genre[df$gndr==1]<-"H"
+df$genre[df$gndr==2]<-"F"
+
+df$age[df$agea<26]<-"25<"
+df$age[df$agea>25 & df$agea<36]<-"26-35"
+df$age[df$agea>35 & df$agea<46]<-"36-45"
+df$age[df$agea>45 & df$agea<66]<-"46-65"
+df$age[df$agea>65 & df$agea<76]<-"66-75"
+df$age[df$agea>75]<-"75>"
+df$age<-factor(df$age,levels=c("25<","26-35","36-45","46-65","66-75", "75>"))
+```
+
+# Analyse univariée
+
+L'analyse univarié, comme son nom l'indique, ne s'intéresse qu'à une seule variable. Celle-ci peut être **quantitative** et quasi continue ou **qualitative**
+variables quantitatives et ne comporter qu'un nombre limité de modalités entre lesquels aucune comparaison de grandeur ne peut être faite. Les première ont le plus souvent dans r un format numeric, les autres correspondent au format *factor*.
+
+## Le cas des variables quantitatives
+
+Les variables quantitatives décrivent une variable dont les valeurs décrivent les quantités d'une unité. Elle peuvent être discrète ( exemple dénombrement du d'un nombre d'unités - le nombre d'habitant), continue - le nombre de km parcouru).
+
+### Histogramme
+
+C'est l'outil de base pour représenter la distribution d'une variable quantitative, l'**histogramme** qui le graphe élémentaire de l'analyse statistique. Il représente pour des intervalles de valeurs donnés, la fréquences des observations. 
+
+Sa syntaxe simple comporte d'abord la défnition de la variable et de la source de données, puis une des "géométrie" de ggplot : la fonction geom_histogram. 
+
+```{r histo01}
+# on stocke le diagramme dans l'objet (g00<-), pour le réutiliser ultérieurement et pouvoir le compléter.
+g00<-ggplot(df,aes(x=trust_interpersonnel))+
+  geom_histogram()
+g00
+```
+
+On va améliorer l'aspect en 
+a) modifiant la couleur et la largeur des barres, 
+b) ajoutant un thème et 
+c) en précisant les éléments textuels ( titres, label).
+
+```{r histo02}
+#avec tous les éléments
+g02 <-g00+geom_histogram(binwith=5,fill="pink")+
+  theme_minimal()+ 
+  labs(title= "Distribution de la confiance interpersonnelle", caption="ESS2002-2018",y= "frequence",x="confiance (index de 0 à 100)") 
+g02
+
+```
+une coquetrie serait d'ajouter la moyenne sous la forme d'une barre verticale et tant qu'à faire la médiane.
+
+```{r histo03}
+
+#on calcule la moyenne
+moy=mean(df$trust_institut, na.rm=TRUE)
+median=median(df$trust_interpersonnel,na.rm=TRUE)
+
+#on ajoute la lignn des moyenne
+g03<- g02+geom_vline(xintercept=moy, color="red",size=2)+
+  geom_vline(xintercept=median, color="orange",size=2)
+g03
+```
+
+diagramme de densité : Au lieu de représenter les effectifs, on ramène l'effectif total à 1.
+
+```{r density}
+g04<-ggplot(df,aes(x=trust_interpersonnel))+ 
+  geom_density(binwidth=10, fill="pink") +
+  theme_minimal()+ 
+  labs(title= "distribution de Confiance interpersonnelle", caption="ESS2002-2018",y= "frequence",x="Confiance ( index de 1 à 100)") 
+
+g04<- g04+ geom_vline(xintercept=moy, color="red",size=1.5)
+g04
+```
+
+On en profite pour regrouper les deux graphes en un seul avec la fonction grid.arrange qui permet très simplement de grouper plusieurs graphes en un seul. Ici on mesure les amélioration à partir du graphe par défaut.
+
+```{r histo10}
+
+grid.arrange(g00, g04, ncol=2)
+```
+
+enfin on peut examiner par rapport à une distribution théorique ajustement de distribution théorique
+
+```{r boxplot5}
+
+g05<-ggplot(df,aes(x=trust_interpersonnel))+ 
+  geom_density(fill="pink")+
+  stat_function(fun = dnorm,color="red",size=1.2, args = list(mean =moy, sd=sd))+
+  theme_minimal() 
+g05
+```
+
+```{r boxplot6}
+
+g06 <- ggplot(df, aes(sample = trust_interpersonnel)) + stat_qq() + stat_qq_line()+theme_minimal()+  labs(title= "QQplot confiance interpersonnelle", caption="ESS2002-2018",y= "Echantillon",x="Théorique") 
+g06
+
+```
+
+On fini cette étude détaillée par l'ajustement d'un modèle (loi normale) aux données.
+
+```{r boxplot7}
+
+df0<-df %>% na.omit() 
+library(MASS)
+fit<-fitdistr(df0$trust_interpersonnel,"normal") 
+fit
+g07<- g05+stat_function(fun =  dnorm ,color="orange",size=1.2, args = list( mean=52.48,  sd=16.57))
+g07
+
+
+```
+
+### Quand la variable est qualitative
+
+Quand la variable est qualitative, que ses variables sont discrètes, la manière de représenter la plus commune est le fameux camembert que les experts écartent. Un diagramme en barre représente mieux les proportions. 
+
+Un premier exemple pour représenter les vagues d'enquetes
+
+```{r count1}
+g08<-ggplot(df,aes(x=Year))+
+  geom_bar(fill="skyblue")+
+  theme_minimal()+  
+  labs(title= "Evolution de la confiance interpersonnelle", caption="ESS2002-2018",y= "frequence",x="Vague d'enquête") 
+
+geom_text(stat='count', aes(label=..count..), vjust=+2)
+g08
+```
+
+Un second exemple pour les ages avec une nouveauté : la rotation à 90°C. 
+
+```{r count2}
+g09a<-ggplot(df,aes(x=age))+geom_bar(fill="palegreen")+theme_minimal()+
+geom_text(stat='count', aes(label=..count..), hjust=1) + coord_flip()+
+ labs(title= "Répartition par classes d'âge", caption="ESS2002-2018",y= "frequence",x="Vague d'enquête") 
+
+g09a
+```
+
+
+en % et en 2 jeux de couleurs standard et couleur
+
+```{r count3}
+g10<-ggplot(df,aes(x=age))+geom_bar(aes(y = (..count..)/sum(..count..),fill = factor(..x..))) +theme_minimal()+coord_flip()+ 
+  labs(title= "Répartition de la population par classe d'âge", caption="ESS2002-2018",y= "%",x="classes d'age") 
+
+g10
+```
+
+si on tient au diagramme en cercle, autant opter pour un treemap avec la bibliothèque treemapifi
+
+https://cran.r-project.org/web/packages/treemapify/vignettes/introduction-to-treemapify.html
+
+
+```{r count4}
+library(treemapify)
+tree1<-df %>% mutate(n=1)%>%group_by(age) %>% summarize(n=sum(n)) %>%filter(!is.na(age))
+g11 <- ggplot(tree1, aes(area = n, fill=n),label=age) +
+  geom_treemap() +   geom_treemap_text(aes(label=age),colour = "white", place = "centre",grow = TRUE)+
+  labs(title= "Répartition de la population par classe d'âge", caption="ESS2002-2018",y= "%",x="classes d'age") 
+
+g11
+
+
+```
+
+
+
+
+
+# Analyse bivariée
+
+on commence
+
+a) par comparer des distribution de plusieurs groupes (variables catégorielles)
+b) par comparer des moyennes d'une variable dépendante en fonction de plusieurs variables indépendantes catégorielle
+c) par mesurer la corrélation entre deux variable quantitative
+d) mesurer l'association entre deux variables qualitatives
+
+
+### Comparer les distributions
+
+Dans notre base on a melangé les données de l'Allemagne et de la France. On va comparer leur distribution.
+
+```{r boxplot0}
+#on recode en facteur la variable
+
+df$cntry<-as.factor(df$cntry)
+
+#on peut utiliser "facet"
+g20<-ggplot(df,aes(x=trust_interpersonnel))+ geom_histogram(binwidth=10, fill="pink")+ facet_grid(cntry~.)+  theme_minimal()+ 
+  labs(title= "Confiance institutionnnelle", caption="ESS2002-2018",y= "frequence",x="Pays")
+g20
+```
+
+mais pour comparer des distribution faut mieux classiquement un boxplot
+
+```{r boxplot8}
+#les boxplot
+
+g21<-ggplot(df,aes(x=cntry, y=trust_interpersonnel))+ geom_boxplot( fill="pink") +
+  theme_minimal()+ 
+  labs(title= "Distribution de la confiance interpersonnelle",subtile="boxplot", caption="ESS2002-2018",y= "Confiance",x="Pays") 
+g21
+```
+
+ou encore plus modern un diagramme en violin
+
+```{r boxplot9}
+
+# une variante : les violin plot
+g22<-ggplot(df,aes(x=cntry, y=trust_interpersonnel))+ geom_violin( fill="pink", trim=FALSE) +  theme_minimal()+
+  geom_boxplot(width=0.1, fill="white")+
+  labs(title= "Distribution de la confiance interpersonnelle",subtile="boxplot", caption="ESS2002-2018",y= "Confiance",x="Pays") 
+g22
+```
+
+encore plus raffiné comparer les pays mais aussi les genres avec facet grid qui permet d'éclater les représentation par pays.
+
+```{r boxplot4}
+
+# une variante : les violin plot
+g23<-ggplot(df,aes(x=genre, y=trust_interpersonnel))+
+  geom_violin( fill="pink") +
+  theme_minimal()+
+  geom_boxplot(width=0.1, fill="white")+
+  labs(title= "Distribution de la confiance interpersonnelle",subtile="boxplot", caption="ESS2002-2018",y= "Confiance",x="Pays")+
+  facet_grid(cntry~.)
+g23
+```
+
+
+
+### Comparaison de moyennes
+
+ggplot traite les données qu'on lui donne. Avec les historgram on accède directement aux données. Si on souhaite représenter les moyennes et les comparer il faut une étape supplémentaire qui vise à calculer ce tableau de données : les valeurs de chacune des vague d'enquête.
+
+
+```{r pressure3}
+df_wave<-df %>% 
+  group_by(age) %>% 
+  summarise(moyenne=mean(trust_interpersonnel, na.rm=TRUE))%>%
+  filter(!is.na(age))
+df_wave
+g06a<-ggplot(df_wave,aes(x=age,y=moyenne))+geom_bar(stat="identity",fill="skyblue")+theme_minimal()+ylim(0,60)
+g06a
+
+```
+
+Naturellement celà n'a pas de sens il faut voir ça par pays on réutilise facet_grid mais on doit pour celà calculer les moyennes par vagues et par pays
+
+```{r pressure4}
+df_wave2<-df %>% group_by(age,cntry) %>% 
+  summarise(moyenne=mean(trust_interpersonnel, na.rm=TRUE)) %>% 
+  filter(!is.na(age))
+
+df_wave2
+library(reshape2)
+df_wave2<-melt(df_wave2)
+g06a<-ggplot(df_wave2,aes(x=age,y=value))+geom_bar(stat="identity",fill="skyblue")+theme_minimal()+facet_grid(cntry~.)
+g06a
+
+```
+
+Une présentation en ligne est cependant bien meilleure et beaucoups plus lisible.
+
+(PS/ si une seule série alors group=1 )
+
+```{r pressure5}
+
+g06b<-ggplot(df_wave2,aes(x=age,y=value, group=cntry))+geom_path(aes(color=cntry),stat="identity", size=2)+
+  theme_minimal()+
+  ylim(45,60)+
+  labs(title= "Confiance interpersonnelle en fonction de l'âge", caption="ESS2002-2018",y= "Confiance",x="Age") +coord_flip()
+
+g06b
+```
+
+
+et tant qu'à faire regardons aussi l'évolution de la confiance institutionnnells
+les deux formes 
+```{r evolconf4, echo=TRUE}
+df_wave3<-df %>% group_by(Year,cntry) %>% 
+  summarise(moy_institu=mean(trust_institut, na.rm=TRUE),moy_interp=mean(trust_interpersonnel, na.rm=TRUE))  %>% 
+  filter(!is.na(cntry))
+
+library(reshape2)
+df_wave3<-melt(df_wave3)
+df_wave3
+
+g11<-ggplot(df_wave3,aes(x=Year,y=value, group=variable))+geom_path(stat="identity", aes(color=variable),size=2)+theme_minimal()+ylim(40,60)+facet_grid(.~cntry)+ 
+  labs(title= "Evolution de la confiance interpersonnelle", caption="ESS2002-2018",y= "Confiance",x="Vagues d'enquêtes") 
+g11
+```
+
+On a commencé par le plus difficile. Comparer l'évolution de deux catégories sur une variable puis deux variables.
+
+Analyser une évolution est un cas particilier, en général on fait des comparison statique. Reprenons l'age et comparon ( en faisant le parallèle des pays). Le graphique va être plus sophistiqué  : on va modifier les couleur et labelliser la legende. C'est fait la la fonction scalecolor ou l'on indique a) les valeurs des couleurs, les modalités de la variable et les labels associés. 
+
+```{r evolconf1, echo=TRUE}
+df_wave3<-df %>% group_by(Year,cntry) %>% summarise(moy_institu=mean(trust_institut, na.rm=TRUE),moy_interp=mean(trust_interpersonnel, na.rm=TRUE))
+library(reshape2)
+df_wave3<-melt(df_wave3)
+df_wave3
+
+
+
+g11<-ggplot(df_wave3,aes(x=Year,y=value, group=variable, na.rm = TRUE))+geom_path(stat="identity", aes(color=variable),size=2)+theme_minimal()+ylim(40,60)+facet_grid(.~cntry)
+g11
+```
+
+Changeons de variable, regardons les variation selon l'age (au moment de l'enquête). La même courbe en U se présente en France et en Alemagne même si le degré de confiance pour les deux formes est plus faible en france.
+
+```{r evolconf2, echo=TRUE}
+
+df_wave3<-df %>% group_by(age,cntry) %>% summarise(moy_institu=mean(trust_institut, na.rm=TRUE),moy_interp=mean(trust_interpersonnel, na.rm=TRUE))
+library(reshape2)
+df_wave3<-melt(df_wave3) %>% filter(!is.na(age))
+
+
+g11<-ggplot(df_wave3,aes(x=age,y=value, group=variable, na.rm = TRUE))+
+  geom_path(stat="identity", aes(color=variable),size=2)+theme_minimal()+ylim(40,55)+
+  facet_grid(.~cntry)+ 
+  labs(title= "Confiance interpersonnelle et institutionnelle", caption="ESS2002-2018",y= "score",x="Classes d'age")+
+   scale_color_manual(values=c("#999999", "#E69F00"),breaks=c("moy_institu", "moy_interp"),
+                       labels=c("Institutionnelle", "Interpersonnelle"))
+g11
+
+
+```
+
+et pour varier regardons les habitats. Ce qui distingue la france est la transition forte qui va des grandes villes vers sa périphérie. Reflet d'une structire geographique moins hierachisée en allemegne qu'en france ( ou plus multipolaire)..
+
+```{r evolconf3, echo=TRUE}
+
+df_wave3<-df %>% group_by(habitat,cntry) %>% summarise(moy_institu=mean(trust_institut, na.rm=TRUE),moy_interp=mean(trust_interpersonnel, na.rm=TRUE))
+library(reshape2)
+df_wave3<-melt(df_wave3) %>% filter(!is.na(habitat))
+
+
+g11<-ggplot(df_wave3,aes(x=habitat,y=value, group=variable, na.rm = TRUE))+
+  geom_path(stat="identity", aes(color=variable),size=2)+theme_minimal()+ylim(40,55)+
+  facet_grid(.~cntry)+ 
+  labs(title= "Confiance interpersonnelle et institutionnelle", caption="ESS2002-2018",y= "score",x="Classes d'age")+
+   scale_color_manual(values=c("#999999", "#E69F00"),breaks=c("moy_institu", "moy_interp"),
+                       labels=c("Institutionnelle", "Interpersonnelle"))
+g11
+
+
+```
+
+### Diagrammes xy - la magie des corrélations 
+
+venons en à analyser les relation entre deux variables quantitatives. 
+
+on a donc appris à comparer dplusieurs distributions, les moyennes de plusieurs variables qualitative, examinons les relation entre deucx variables quantitatibe
+
+```{r xy1}
+
+g31<- ggplot(df, aes(x= trust_interpersonnel,y=trust_institut, group=Year)) +
+  geom_point( size=0.1)+
+  theme_minimal()   
+g31
+                  
+```
+ Ce graphe est peu clair, ils y a trop de points qui prennent des valeurs discrètes. Une astuce estde donner une position aléatoire pour sur disperser, on fait mieux apparaitre la densité de points.
+ 
+
+```{r xy2}
+
+g32<-ggplot(df, aes(x= trust_interpersonnel,y=trust_institut, group=Year)) +
+  geom_point(position = "jitter", size=0.1, color="grey")+
+  theme_minimal()               
+g32                  
+```
+on peut souhaiter ajouter une droite des moindre carrés (calculée pour chaque vague d'enquête pour évaluer la stabilité de la relation dans le temps). Les lignes sont parallèles, la corrélation ne change pas dans le temps, c'est une relation stable.upe, les deux confiance cont dans le meme sens. On verra dans un autre notebook comment calculer ces droites de corrélations. 
+
+```{r xy3}
+df0<-df%>% filter(!is.na(Year))
+g3<-ggplot(df0, aes(x= trust_interpersonnel,y=trust_institut, group=cntry)) +
+  geom_point(position = "jitter", size=0.1, color="grey")+geom_smooth(method="lm", aes(color=cntry))+theme_minimal()             
+g3                    
+```
+
+Mais en attendant en voci un calcul élémentaire. Le r² est de 0,18, la corrélation est de l'ordre d'un peu plus 0,42 ce qui est assez élevé mais laisse une certaine indépendance des variables. Elle désignent des objets liés mais différents.
+
+```{r xy4}
+cor.test(df$trust_interpersonnel, df$trust_institut)
+library(lme4)
+
+fits <- lmList(trust_interpersonnel ~ trust_institut | cntry, data=df)
+summary(fits)
+```
+Une autre représentation plus éclatée qui ne montre rien de plus que la régularité
+
+```{r xy5}
+
+ggplot(df, aes(x= trust_institut,y=trust_interpersonnel)) + geom_point() +geom_smooth(method="lm") +theme_minimal() +facet_wrap(~Year)              
+                  
+```
+
+## Deux variables qualitatives
+
+###les diagrammes en barres
+```{r count5}
+g05a<-ggplot(df,aes(x=Year,y=..count..,fill=cntry))+geom_bar(position = "stack")+theme_minimal()
+g05a
+g05b<-ggplot(df,aes(x=Year,y=..count..,fill=cntry))+geom_bar(position = "dodge")+theme_minimal()
+grid.arrange(g05a,g05b,ncol=2)
+
+```
+
+
+## Les treemaps, c'est merveilleux
+
+D'autre graphiques et des emboitements 
+
+
+```{r treemap4}
+library(treemapify)
+tree1<-df %>% mutate(n=1)%>%group_by(cntry,genre,habitat) %>% summarize(n=sum(n),mean=mean(trust_interpersonnel, na.rm=TRUE))
+
+g10 <- ggplot(tree1, aes(area = n, fill=genre,subgroup=cntry)) +
+  geom_treemap() +   
+  geom_treemap_text(aes(label=habitat),colour = "white", place = "centre",grow = FALSE)+
+      geom_treemap_subgroup_text(color="white",grow = FALSE)+geom_treemap_subgroup_border()
+g10
+
+
+```
+
+## Des chi2 et des diagramme de dépendence
+
+
+
+# Examiner beaucoups de variables
+
+Nous nous sommes concentrés sur des index. Par exemple nous avons traité la confiance instititutionnelle. Mais on peut vouloir traiter ensemble tous les items, on en a 7.
+
+
+## Profils
+
+```{r profil1}
+rad<-df %>% 
+  group_by (habitat,cntry) %>% 
+  summarize(Partis=mean(Partis, na.rm=TRUE),
+  Parlement=mean(Parlement, na.rm=TRUE),
+  Politiques=mean(Politiques, na.rm=TRUE),
+  Police=mean(Police, na.rm=TRUE),
+  Justice=mean(Justice, na.rm=TRUE),
+  NationsUnies=mean(NationsUnies, na.rm=TRUE),
+  ParlementEurop=mean(ParlementEurop, na.rm=TRUE)) %>% filter(!is.na(habitat))
+
+rad<-melt(rad)
+ggplot(rad, aes(x=reorder(variable, value),y=value,group=habitat))+
+  geom_line(aes(color=habitat), size=2)+
+  facet_grid(.~cntry)+ 
+  theme_minimal()+scale_color_brewer(type="div",palette=3)+coord_flip()+
+  labs(title= "Les éléments de la confiance institutionnelle", caption="ESS2002-2018",y= "confiance (de 1 à 10)",x="institutions") 
+
+```
+
+La différence entre les deux pays est claire, la rupture est accusée plus fortement en france qu'en allemagne. L'explication n'est sans doute pas culturelle mais démographique, un coup d'oeil à la carte des densité permet de comprendre mieux : https://www.populationdata.net/cartes/allemagne-france-densite-de-population-2011/.
+ 
+ refaisons la même chose pour la confiance interpersonnelle
+ 
+```{r profil2}
+rad<-df %>% 
+  group_by (habitat,cntry) %>% 
+  summarize(help=mean(help, na.rm=TRUE),
+  fair=mean(fair, na.rm=TRUE),
+  trust=mean(trust, na.rm=TRUE)) %>% filter(!is.na(habitat))
+
+rad<-melt(rad)
+ggplot(rad, aes(x=reorder(variable, value),y=value,group=habitat))+
+  geom_line(aes(color=habitat), size=2)+coord_flip()+facet_grid(.~cntry)+ 
+  theme_minimal()+scale_color_brewer(type="div",palette=3)+
+  labs(title= "Les éléments de la confiance interpersonnelle", caption="ESS2002-2018",y= "Confiance (de 1 à 10)",x="Institutions") 
+
+```
+
+## radar
+
+
+```{r radar}
+library(fmsb)
+
+rad<-df %>% filter(cntry=="FR") %>%
+  group_by (habitat) %>%
+  summarize(Partis=mean(Partis, na.rm=TRUE),
+  Parlement=mean(Parlement, na.rm=TRUE),
+  Politiques=mean(Politiques, na.rm=TRUE),
+  Police=mean(Police, na.rm=TRUE),
+  Justice=mean(Justice, na.rm=TRUE),
+  NationsUnies=mean(NationsUnies, na.rm=TRUE),
+  ParlementEurop=mean(ParlementEurop, na.rm=TRUE)) %>% filter(!is.na(habitat)) %>% dplyr::select(-habitat)
+
+#on doit indiquer les valeurs minimale et maximale - la fonction rep permet de repeter (ici 7 fois pour les 7 variables/col)
+data <- rbind(rep(7,7) , rep(3,7) , rad)
+#l'autre method c'est ce choisir maxmin=FALSE
+
+rownames(rad) <- c("big city", "suburbs" ,"town","village", "countryside")
+radarchart(rad, axistype=0, seg=4, title="Moyenne par institution", maxmin=FALSE)
+legend(x=0.7, y=1, legend = rownames(rad), bty = "n",text.col = "grey", cex=1.2, pt.cex=3)
+```
+
+# Un programme pour la suite
+
+## Des chloropleth pour la géographie
+
+### les cartes
+
+### Les projection des variables
+
+### Quelques affinnements
+
+## Apres l'espace,le temps
+
+Même si nous avons indiquer des manière de représenter une évolution, des techniqueplus spécifiques peuevent etre employées.
+
+### lisser les séries
+
+les premières techniques reviennetn à donner les tendances, à donner les rythme,  et 
+
+### Saisonnalité
+
+### Séries chronologiques
+
+la decomposition
+### Extrapolation
+
+# Ressources
+
+Un point de départ fondamental est la [gallery de ggplot](https://www.r-graph-gallery.com/),, elle présente de manière synthétique toute les types de figures qui peuvent être présentées. Avec du code facilement reproductible. Voici le [book de référence](https://ggplot2-book.org/), qui est au centre de ce cours. On aura besoin de manière assez systématique de manipuler les données avant de les représenter,  [dplyr](http://larmarange.github.io/analyse-R/manipuler-les-donnees-avec-dplyr.html) nous permet de le faire aisément.
+
+
+Ces outils s'appuient sur l'idée de [grammaire des graphiques](https://www.goodreads.com/book/show/2549408.The_Grammar_of_Graphics). En voici un [clair résumé](https://cfss.uchicago.edu/notes/grammar-of-graphics/).En français il y a toujours le [larmarange](http://larmarange.github.io/analyse-R/intro-ggplot2.html)
+
+
+le graphisme est immportant. Une bibliothèque de modèle.
+
+L'art des couleurs tient dans les palettes on aimera celles de Wes Anderson, on peut adorer fishualize. on trouvera
+
+
+
+
+
