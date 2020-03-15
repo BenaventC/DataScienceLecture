@@ -1,4 +1,4 @@
-![confiance](datascience.JPG)
+![confiance](datascience.jpg)
 
 # Le syllabus
 
