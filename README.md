@@ -1,3 +1,5 @@
+![confiance](datascience.JPG)
+
 # Le syllabus
 
 Ceci est mon cours de "data science", adapté à l'environnement r. On y trouvera les éléments des différents chapitres.
@@ -7,7 +9,7 @@ Ceci est mon cours de "data science", adapté à l'environnement r. On y trouver
  * Chapître 3 - [Dataviz avec ggplot](http://r.benavent.fr/graphMaj.html) : On apprend à y manipuler tidyverse et ggplot, c'est indispensable avant de regarder les modèles.
  * Chapître 4 - [Corrélations et régressions](http://r.benavent.fr/regression.html) reprendre les bases dans l'esprit de r et avec un peu de sophistication
  * Chapître 5 - [Analyse factorielle et clustering]() : pour revenir à la bonne époque de l'analyse de données
- * Chapître 6 - des [réseaux sociaux] : on jouera avec twitter et l'idée de qui est proche de qui.
+ * Chapître 6 - des [réseaux sociaux]() : on jouera avec l'API de twitter et l'idée de qui est proche de qui.
  * Chapître 7 - [Arbres de décisions et machine learning](http://r.benavent.fr/caret.html) on y verra comment une idée sexagénaire est devenue un modèle emblématique du machine learning. C'est plus que de la technique, mais de l'histoire des sciences
  * Chapître 8 - Un peu de NLP. On commencera par lire cette [synthèse](https://www.researchgate.net/publication/337744581_NLP_text_mining_V40_-_une_introduction_-_cours_programme_doctoral) et on jettera un coup d'oeil au projet [Polynésie](https://github.com/BenaventC/polynesie) ou à celui [AirBnb](https://github.com/BenaventC/AirbnbStudies)
 
