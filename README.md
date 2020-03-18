@@ -2,7 +2,7 @@
 
 # Le syllabus
 
-Ceci est mon cours de "data science", adapté à l'environnement r. On y trouvera les éléments des différents chapitres.
+Ceci est mon cours de "data science", adapté à l'environnement r. On y trouvera les éléments des différents chapitres. L'ensemble des scripts (*.rmd) et des données(*.drs ou *.csv) sont inclus dans ce repository, sauf si le lien renvoie à un autre repository ( et on les retrouve dans ce dernier)
 
  * Chapître 1 : une présentation PPT d'introduction à l'[environnement r](https://docs.google.com/presentation/d/1FdAIW83N8EAWHCnc66PfnphdGyNr-wyS6dUPOlUTY0Hg/edit?usp=sharing)
  * Chapître 2 : [prise en main](https://github.com/BenaventC/Recommandation) avec un petit jeu de données et toute la panoplie des techniques de base.
